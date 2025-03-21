@@ -1,0 +1,224 @@
+---
+title: "week9assignment_RC"
+output: html_document
+date: "2025-03-18"
+---
+
+## Set Up
+
+```{r}
+
+lizards <- read.csv("jrn_lizard.csv")
+
+library(here)
+library(tidyverse)
+library(naniar)
+library(DHARMa)
+library(gtsummary)
+library(broom)
+
+lizards_filtered <- lizards %>%
+  filter(spp == "UTST")
+
+```
+
+## Exploratory Figures
+
+```{r}
+
+hist1 <- ggplot(lizards_filtered, aes(x = SV_length)) +
+  geom_histogram() +
+  theme_bw()
+hist1
+
+bar1 <- ggplot(lizards_filtered, aes(x = tail)) + #cannot do histogram without continuous x
+  geom_bar() +
+  theme_bw()
+bar1
+
+bar2 <- ggplot(lizards_filtered, aes(x = sex)) + geom_bar() + theme_bw()
+bar2
+
+bar3 <- ggplot(lizards_filtered, aes(x = zone)) + geom_bar() + theme_bw()
+bar3
+
+```
+
+## As Factors and Model
+
+```{r}
+
+unique(lizards_filtered$zone)
+
+lizards_filtered$zone <- factor(lizards_filtered$zone,
+                              levels = c("C", "G", "M", "T"))
+
+unique(lizards_filtered$sex)
+
+lizards_filtered$sex <- factor(lizards_filtered$sex,
+                              levels = c("J", "F", "M"))
+
+unique(lizards_filtered$tail)
+
+lizards_filtered$tail <- factor(lizards_filtered$tail,
+                              levels = c("B", "W"))
+
+liz_mod <- glm(tail~SV_length+sex+zone,
+                 data = lizards_filtered,
+                 family = "binomial")
+
+summary(liz_mod)
+
+simulateResiduals(liz_mod) %>% plot()
+
+```
+
+The results of a logistic regression suggest that the log-odds of having a whole tail are greater with lower snout-to-vent length (B = -0.045, p < 0.001). There was also a significant decrease in log-odds of having a whole tail in vegetation zones with black grama grassland (B = -0.565, p = 0.001) and tarbush shrubland (B = -0.404, p = 0.025) relative to creosotebush shrubland. Mesquite duneland vegetation zones (B = -0.301, p = 0.063) did not have significant log-odds of having a whole tail relative to creosotebush shrubland. Neither females (B = -0.204, p = 0.322) nor males (B = -0.139, p = 0.534) had significant log-odds of having a whole tail relative to juveniles. 
+
+## Predictive Figures
+
+```{r, fig.cap="Figure 1. Predictive model of the probability of a lizard tail being whole in relation to snout-to-vent length by vegetation zone."}
+
+# variables are SV length, sex, and zone
+
+range(lizards_filtered$SV_length, na.rm=TRUE)
+
+length_vector <- rep(seq(from = 5, to = 87), 12) #83, 3, and 4 don't have common factors
+
+sex_vector <- rep(c("J", "F", "M"), 332)
+
+zone_vector <- c(rep("C", 249),
+                   rep("G", 249),
+                 rep("M", 249),
+                 rep("T", 249))
+
+data_pred <- data.frame(sex_vector, length_vector, zone_vector)
+colnames(data_pred) <- c("sex", "SV_length", "zone")
+
+prediction <- predict(liz_mod,
+                      newdata = data_pred,
+                      type = "response",
+                      se.fit = TRUE)
+
+
+data_fig <- data.frame(data_pred,
+                       prediction$fit,
+                       prediction$se.fit)
+
+
+colnames(data_fig) <- c("Sex", "Length", "Zone", "probability", "se")
+
+ggplot(data_fig, aes(x = Length,
+                     y = probability)) +
+  geom_smooth(aes(color = Zone)) +
+  geom_ribbon(aes(ymin = probability - se,
+                  ymax = probability + se,
+                  fill = Zone), alpha = 0.3) +
+  labs(x = "Length", y = "Probability of Whole Tail", color = "Zone", fill = "Zone") +
+  theme_bw()
+
+# jagged because there are so many replicates?
+
+```
+
+```{r, fig.cap="Figure 2. Predictive model of the probability of a lizard tail being whole in relation to snout-to-vent length by sex."}
+
+ggplot(data_fig, aes(x = Length,
+                     y = probability)) +
+  geom_smooth(aes(color = Sex)) +
+  geom_ribbon(aes(ymin = probability - se,
+                  ymax = probability + se,
+                  fill = Sex), alpha = 0.3) +
+  labs(x = "Length", y = "Probability of Whole Tail", color = "Sex", fill = "Sex") +
+  theme_bw()
+
+```
+
+The probability of having a whole tail decreases as snout-to-vent length increases for all sexes and vegetation zones.
+
+## Poisson Regression: Exploratory Plots
+
+```{r}
+
+lizards2 <- read_csv("jrn_lizard_npp.csv")
+
+ggplot(lizards2, aes(x = BOER,
+                     y = lizard_count)) +
+  geom_point(aes(color = season)) +
+  labs(x = "percent cover", y = "lizard count") +
+  theme_bw()
+
+ggplot(lizards2, aes(x = LATR,
+                     y = lizard_count)) +
+  geom_point(aes(color = season)) +
+  labs(x = "percent cover", y = "lizard count") +
+  theme_bw()
+
+ggplot(lizards2, aes(x = PRGL,
+                     y = lizard_count)) +
+  geom_point(aes(color = season)) +
+  labs(x = "percent cover", y = "lizard count") +
+  theme_bw()
+
+ggplot(lizards2, aes(x = SCBR,
+                     y = lizard_count)) +
+  geom_point(aes(color = season)) +
+  labs(x = "percent cover", y = "lizard count") +
+  theme_bw()
+
+```
+
+## Poisson Regression
+
+```{r}
+
+unique(lizards2$season)
+
+lizards2$season <- factor(lizards2$season,
+                             levels = c("F",
+                                        "S",
+                                        "W"))
+
+lizard2_mod <- glm(lizard_count~season+BOER+LATR+PRGL+SCBR,
+                data = lizards2,
+                family = "poisson")
+
+```
+
+```{r}
+
+summary(lizard2_mod)
+
+plot(lizard2_mod)
+
+lizards2_2 <- lizards2[-c(1,4,50),]
+
+lizard2_mod_2 <- glm(lizard_count~season+BOER+LATR+PRGL+SCBR,
+                 data = lizards2_2,
+                 family = "poisson")
+
+summary(lizard2_mod_2)
+
+plot(lizard2_mod_2)
+
+```
+
+```{r}
+
+lizards2_3 <- lizards2_2[-c(18),]
+
+lizard2_mod_3 <- glm(lizard_count~season+BOER+LATR+PRGL+SCBR,
+                 data=lizards2_3,
+                 family = "poisson")
+
+summary(lizard2_mod_3)
+
+plot(lizard2_mod_3)
+
+tbl_regression(lizard2_mod_3)
+
+```
+
+I removed a total of four outliers that were beyond Cook's distance.
+
+The results of a logistic regression suggest that the log-odds of having higher lizard counts increase with burrograss vegetation (B = 0.490, p < 0.001). The log-odds of higher lizard counts decrease with increased black grama grass vegetation (B = -0.125, p < 0.001). There was a significant decrease in the log-odds of having higher lizard counts in the summer (B = -0.911, p < 0.001) relative to the fall. Neither increased creosote bush (B = 0.062, p = 0.575) nor honey mesquite (B = 0.090, p = 0.116) had significant log-odds of having higher lizard counts. Winter (B = 0.017, p = 0.847) did not have significant log-odds of having higher lizard counts relative to fall. 
