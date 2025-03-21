@@ -1,5 +1,6 @@
 ---
-title: "week9assignment_RC"
+title: "Week 9 Assignment"
+author: "Becca Cox"
 output:
   pdf_document: default
   html_document: default
